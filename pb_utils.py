@@ -1,14 +1,16 @@
 from pyraf import iraf
+from astropy.table import Table, Column
+import numpy as np
 import string, os, pyfits, glob, math, os.path #, pywcs
-# TODO: update to use astropy -- currently the pywcs import doesn't work
+# TODO: update all to use astropy -- currently the pywcs import doesn't work
 
-# pstamp: generates postage stamps from a list of images ('images')
-# for a list of objects given in coords (ra dec name)
-# with stampsize 'size' in units 'units'
-#  stamp images are rotated to have N-up, E-left.
-
+# pstamp: 
 # updated 2006 Jan 19 to fix negative zero declination issue
 def pstamp(images,coords,size,outdir='./',units='arcmin'):
+    '''generates postage stamps from a list of images
+      for a list of objects given in coords (format: ra dec name)
+      with stampsize 'size' in units 'units'
+      stamp images are rotated to have N-up, E-left.'''
 
     # carry size in degrees
     if units == 'arcsec':
@@ -109,7 +111,7 @@ def pstamp(images,coords,size,outdir='./',units='arcmin'):
 #      os.remove('tmpr.fits')
 
 def parse_fname(name_list):
-    """this provides an IRAF-like input filename template parser"""
+    """an IRAF-like input filename template parser"""
     if (len(name_list) > 0 and name_list[0] == '@'):
         try:                                                 # names are in a file
             fd = open(name_list[1:])                         #  one on each line
@@ -131,7 +133,7 @@ def parse_fname(name_list):
 
 
 def parse_coolist(name_list):
-    """this provides an IRAF-like input filename template parser"""
+    """parse the coordinate list for pstamp"""
     coo_list = []
     if (len(name_list) > 0 and name_list[0] == '@'):
         try:                                                 # objects are in a file
@@ -155,6 +157,7 @@ def parse_coolist(name_list):
 
 
 def objtup(objinf):
+    '''parse coordinate strings'''
      dat = objinf.split()
      if len(dat) != 3:
        return ()
@@ -172,7 +175,7 @@ def objtup(objinf):
      return (dat[0],dat[1],dat[2])
 
 def findpos(ra,dec,im):
- 
+    '''locate the pixel coordinates corrdspnding to ra, dec in im'''
      sysstr = 'sky2xy %s %s %s' % (im, str(ra),str(dec))
      outstr = os.popen(sysstr).readlines()[0]
      x,y = string.split(outstr)[4],string.split(outstr)[5]
@@ -180,9 +183,9 @@ def findpos(ra,dec,im):
        x = -1
      return(float(x),float(y))
 
-# given an image, returns PA in degrees
-#  and pixel size (assumed to be square) in degrees
-def get_wcs(im):
+ def get_wcs(im):
+     '''given an image, returns PA in degrees
+         and pixel size (assumed to be square) in degrees'''
      fimg = pyfits.open(im,'readonly')
      if len(fimg) > 1:
         hdr = fimg['SCI'].header
@@ -202,9 +205,8 @@ def get_wcs(im):
      fimg.close()
      return(cr2,pxsc)
 
-##turns a section file (eg [1:3108,82:153]) into a ds9 regions file
 def sect_to_reg(infile,outfile):
-
+    '''convert list of IRAF sections to ds9 region format'''
     fo = open(outfile,'w')
     fo.write('# Region file format: DS9 version 4.1\n')
     fo.write('global color=green dashlist=8 3 width=1 font="helvetica 10 normal" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1\n')
@@ -223,10 +225,9 @@ def sect_to_reg(infile,outfile):
     fi.close()
     fo.close()
 
-##turns a ds9 regions file into an IRAF-style section file (eg 1 3108 82 153)  
-# only does rectangular sections, physical coordinates
 def reg_to_sect(infile,outfile):
-
+    '''turns a ds9 regions file into an IRAF-style section file (eg 1 3108 82 153)  
+    only does rectangular sections, physical coordinates'''
     fo = open(outfile,'w')
     fi = open(infile,'r')
     for line in fi.readlines():
@@ -247,9 +248,8 @@ def reg_to_sect(infile,outfile):
     fo.close()
 
 
-# do photmetry inside polygons
 def py_poly_phot(img_list, poly_list, output_sfx = '.ppy',coords='world'):
-
+    '''do photmetry inside polygons'''
     #read list of polygon vertices 
     #same format as IRAF polyphot: one vertex per line, colon separates polygons
     polylist = []
@@ -337,11 +337,10 @@ def py_poly_phot(img_list, poly_list, output_sfx = '.ppy',coords='world'):
     return
 
 
-# determine if a point is inside a given polygon or not
-# Polygon is a list of (x,y) pairs (the vertices)
 # grabbed online from http://www.ariel.com.au/a/python-point-int-poly.html
 def point_inside_polygon(x,y,poly):
-
+    '''determine if a point is inside a given polygon or not
+    Polygon is a list of (x,y) pairs (the vertices)'''
     n = len(poly)
     inside =False
 
@@ -359,11 +358,11 @@ def point_inside_polygon(x,y,poly):
 
     return inside
 
-# determine how much of a pixel centered at (xpix,ypix) is inside a polygon
-# recall that pixel centres are at integer values, so corners are half-integers
-# subdiv: pixel sub-division factor
 def pixel_inside_polygon(xpix, ypix, poly, subdiv=10):
+    '''determine how much of a pixel centered at (xpix,ypix) is inside a polygon
+    subdiv: pixel sub-division factor'''
 
+    # recall that pixel centres are at integer values, so corners are half-integers
     # compute the coordinates of the pixel corners
     xmin = xpix-0.5
     xmax = xpix+0.5
@@ -391,9 +390,10 @@ def pixel_inside_polygon(xpix, ypix, poly, subdiv=10):
     infrac = float(subsum)/(subdiv*subdiv)
     return(infrac)
     
-# take a list of (x,y) pairs and find the min,max values of both x and y
-# there's gotta be a more elegant way to do this, but hey
+
 def poly_corner(poly): 
+    '''take a list of (x,y) pairs and find the min,max values of both x and y'''
+    # there's gotta be a more elegant way to do this, but hey
     x = np.zeros(len(poly))
     y = np.zeros(len(poly))
     for i in range(0,len(poly)):
@@ -438,6 +438,7 @@ def parse_fname(name_list):
             
         return list
 
+# NOT COMPLETE
 def pymstat(img_glob, lower=None, upper=None, img_sect = None):
     """Pythonic version of IRAF imstat:
         produce image statistics for all science planes of an image,
@@ -506,3 +507,22 @@ def find_image_planes(hdulist):
             except KeyError: # no 'EXTNAME', just assume we want this extension
                 img_plns.append(extn)
     return(img_plns)
+
+def transpose_table(tab_before, id_col_name='ID'):
+    '''Returns a copy of tab_before (an astropy.Table) with rows and columns interchanged
+        id_col_name: name for optional ID column corresponding to
+        the column names of tab_before'''
+    # contents of the first column of the old table provide column names for the new table
+    # TBD: check for duplicates in new_colnames & resolve
+    new_colnames=tuple(tab_before[tab_before.colnames[0]])
+    # remaining columns of old table are row IDs for new table 
+    new_rownames=tab_before.colnames[1:]
+    # make a new, empty table
+    tab_after=Table(names=new_colnames)
+    # add the columns of the old table as rows of the new table
+    for r in new_rownames:
+        tab_after.add_row(tab_before[r])
+    if id_col_name != '':
+        # add the column headers of the old table as the id column of new table
+        tab_after.add_column(Column(new_rownames, name=id_col_name),index=0)
+    return(tab_after)
