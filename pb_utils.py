@@ -3,6 +3,7 @@ from astropy.table import Table, Column
 from astropy import wcs
 from astropy.io import fits
 import numpy as np
+import matplotlib.pyplot as plt
 import string, os, glob, math, os.path 
 
 # pstamp: 
@@ -420,6 +421,41 @@ def convert_poly(poly, coords, wcs):
         newpoly.append([x,y])
     return(newpoly)
 
+def pymhist(img_name, lower=None, upper=None, img_sect = None):
+    """Pythonic version of IRAF imhist
+
+    Parameters
+    ----------
+    img_glob: input image name. Can include extension in square brackets.
+
+    lower: float value below which to ignore pixel values 
+
+    upper: float value above which to ignore pixel values 
+
+    img_section: IRAF-style image-section over which to do stats (NOT IMPLEMENTED)
+      (NB: uses 1-indexed pixel locations, [x_low:x_high, y_low: y_high])
+
+    Outputs
+    -------
+    mapltotlib figure"""
+
+
+    if '[' in img_name:
+     # get the extension and just the fits part       
+        plane = int(img_name[string.find(img_name,'[')+1:string.find(img_name,']')])
+        img = img_name[:string.find(img_name,'[')]
+    else:
+        img = img_name
+        plane = 0
+    hdulist = fits.open(img)
+    dat = hdulist[plane].data
+    valid = dat[~np.isnan(dat)]
+    if lower != None:
+        valid = valid[valid>lower]
+    if upper != None:
+        valid = valid[valid<upper]
+    plt.hist(valid,bins=100) # TODO: different formatting tick exponent
+    return
 
 # NOT COMPLETE
 def pymstat(img_glob, lower=None, upper=None, img_sect = None):
@@ -431,9 +467,9 @@ def pymstat(img_glob, lower=None, upper=None, img_sect = None):
     ----------
     img_glob: string to glob for input images
 
-    lower: float value below which to ignore pixel values (NOT IMPLEMENTED)
+    lower: float value below which to ignore pixel values 
 
-    upper: float value above which to ignore pixel values (NOT IMPLEMENTED)
+    upper: float value above which to ignore pixel values 
 
     img_section: IRAF-style image-section over which to do stats (NOT IMPLEMENTED)
       (NB: uses 1-indexed pixel locations, [x_low:x_high, y_low: y_high])
@@ -454,6 +490,10 @@ def pymstat(img_glob, lower=None, upper=None, img_sect = None):
             plane_name = '{}[{}]'.format(img,plane)
             dat = hdulist[plane].data
             valid = dat[~np.isnan(dat)]
+            if lower != None:
+                valid = valid[valid>lower]
+            if upper != None:
+                valid = valid[valid<upper]
             img_mean = valid.mean()
             img_std = valid.std()
             img_med = np.median(valid)
