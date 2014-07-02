@@ -1,11 +1,13 @@
-from pyraf import iraf
+#from pyraf import iraf
 from astropy.table import Table, Column
+from astropy import wcs
+from astropy.io import fits
 import numpy as np
-import string, os, pyfits, glob, math, os.path #, pywcs
-# TODO: update all to use astropy -- currently the pywcs import doesn't work
+import string, os, glob, math, os.path 
 
 # pstamp: 
 # updated 2006 Jan 19 to fix negative zero declination issue
+# TODO: eventually update to get rid of IRAF commands
 def pstamp(images,coords,size,outdir='./',units='arcmin'):
     '''generates postage stamps from a list of images
       for a list of objects given in coords (format: ra dec name)
@@ -64,7 +66,7 @@ def pstamp(images,coords,size,outdir='./',units='arcmin'):
         ymin = int(round(min(y1,y2,y3,y4)))
 
         # check to see if this is an HST image (need SCI extension)
-        fimg = pyfits.open(im,'readonly')
+        fimg = fits.open(im,'readonly')
         if len(fimg) > 1:
            extstr='[SCI]'
            hdr = fimg['SCI'].header
@@ -157,11 +159,11 @@ def parse_coolist(name_list):
 
 
 def objtup(objinf):
-    '''parse coordinate strings'''
-     dat = objinf.split()
-     if len(dat) != 3:
+    """parse coordinate strings"""
+    dat = objinf.split()
+    if len(dat) != 3:
        return ()
-     if string.find(dat[0],':') > 0:
+    if string.find(dat[0],':') > 0:
        ra = string.split(dat[0],':') 
        dat[0] = 15.0*(float(ra[0])+float(ra[1])/60.0+float(ra[2])/3600.0)
        dec = string.split(dat[1],':') 
@@ -169,13 +171,13 @@ def objtup(objinf):
          dat[1] = float(dec[0])+float(dec[1])/60.0+float(dec[2])/3600.0
        else:
          dat[1] = float(dec[0])-float(dec[1])/60.0-float(dec[2])/3600.0
-     else:
+    else:
        dat[0] = float(dat[0])
        dat[1] = float(dat[1])         
-     return (dat[0],dat[1],dat[2])
+    return (dat[0],dat[1],dat[2])
 
 def findpos(ra,dec,im):
-    '''locate the pixel coordinates corrdspnding to ra, dec in im'''
+     '''locate the pixel coordinates corrdspnding to ra, dec in im'''
      sysstr = 'sky2xy %s %s %s' % (im, str(ra),str(dec))
      outstr = os.popen(sysstr).readlines()[0]
      x,y = string.split(outstr)[4],string.split(outstr)[5]
@@ -183,27 +185,27 @@ def findpos(ra,dec,im):
        x = -1
      return(float(x),float(y))
 
- def get_wcs(im):
-     '''given an image, returns PA in degrees
+def get_wcs(im):
+    '''given an image, returns PA in degrees
          and pixel size (assumed to be square) in degrees'''
-     fimg = pyfits.open(im,'readonly')
-     if len(fimg) > 1:
+    fimg = fits.open(im,'readonly')
+    if len(fimg) > 1:
         hdr = fimg['SCI'].header
-     else:
-        hdr = fimg[0].header
-     if hdr.has_key('CROTA2') and hdr.has_key('CDELT2'): #  use CROTA1 and CDELT keywords if there
-        cr2 = 0.0 - hdr['CROTA2']            
-        pxsc = math.fabs(hdr['CDELT2'])
-     elif hdr.has_key('CD1_2') and hdr.has_key('CD2_2'): #  or use CD matrix: lazy case assuming no skew
-        cd12 = hdr['CD1_2']
-        cd22 = hdr['CD2_2']
-        cr2 = math.atan2(cd12,cd22)*180.0/math.pi  
-        pxsc = math.sqrt(cd12**2+cd22**2)
-     else:
-        cr2 = 0.0
-        pxsc = 0.0
-     fimg.close()
-     return(cr2,pxsc)
+    else:
+         hdr = fimg[0].header
+    if hdr.has_key('CROTA2') and hdr.has_key('CDELT2'): #  use CROTA1 and CDELT keywords if there
+         cr2 = 0.0 - hdr['CROTA2']            
+         pxsc = math.fabs(hdr['CDELT2'])
+    elif hdr.has_key('CD1_2') and hdr.has_key('CD2_2'): #  or use CD matrix: lazy case assuming no skew
+         cd12 = hdr['CD1_2']
+         cd22 = hdr['CD2_2']
+         cr2 = math.atan2(cd12,cd22)*180.0/math.pi  
+         pxsc = math.sqrt(cd12**2+cd22**2)
+    else:
+         cr2 = 0.0
+         pxsc = 0.0
+    fimg.close()
+    return(cr2,pxsc)
 
 def sect_to_reg(infile,outfile):
     '''convert list of IRAF sections to ds9 region format'''
@@ -269,9 +271,9 @@ def py_poly_phot(img_list, poly_list, output_sfx = '.ppy',coords='world'):
     for img in parse_fname(img_list):
 
 	    #read image & header
-	    im, hdr = pyfits.getdata(img, header=True)
+	    im, hdr = fits.getdata(img, header=True)
 	    # Parse the WCS keywords in the primary HDU
-	    wcs = pywcs.WCS(hdr)
+	    imwcs = wcs.WCS(hdr)
 	    y, x = np.indices(im.shape).astype(float)
 		
 	    #loop over polygons
@@ -282,7 +284,7 @@ def py_poly_phot(img_list, poly_list, output_sfx = '.ppy',coords='world'):
 	    sig_arr = np.zeros(len(polylist))
 	    unc_arr = np.zeros(len(polylist))
 	    for poly in polylist:
-                poly_img = convert_poly(poly, coords, wcs)
+                poly_img = convert_poly(poly, coords, imwcs)
 	        pindx +=1
                 if len(poly) > 2:
 		        msk = np.zeros(im.shape)     #create polygon mask
@@ -328,6 +330,7 @@ def py_poly_phot(img_list, poly_list, output_sfx = '.ppy',coords='world'):
                 # end of loop over polygons
 
             # write the output to file
+            # TODO: change to use something other than arrayascii
             imbase = os.path.basename(img)
             magout = imbase[:-5]+output_sfx
             if os.path.isfile(magout):
@@ -417,26 +420,6 @@ def convert_poly(poly, coords, wcs):
         newpoly.append([x,y])
     return(newpoly)
 
-def parse_fname(name_list):
-    """an IRAF-like input filename template parser"""
-    if (len(name_list) > 0 and name_list[0] == '@'):
-        try:                                                 # names are in a file
-            fd = open(name_list[1:])                         #  one on each line
-            text = fd.read()
-            fd.close()
-            kw_list = text.split()
-            if kw_list == []: kw_list = ['']
-            return kw_list
-        except IOError:
-            print "Warning: file %s not found, assume null list" % name_list[1:]
-            return([''])
-    else:                                                                 
-        list = []
-        _list = name_list.split(',')
-        for i in range(len(_list)):
-            list = list + glob.glob(_list[i].strip())
-            
-        return list
 
 # NOT COMPLETE
 def pymstat(img_glob, lower=None, upper=None, img_sect = None):
@@ -461,22 +444,26 @@ def pymstat(img_glob, lower=None, upper=None, img_sect = None):
 
 
     imglist = glob.glob(img_glob)
+    if len(imglist) > 0:
+        outstr = '{:20s} {:7s} {:7s} {:10s} {:10s} {:10s} {:10s} {:10s}'.format('Name', 'N_good', 'N_NaN', 'img_mean', 'img_std', 'img_med', 'img_min', 'img_max')
+        print(outstr)
     for img in imglist:
         hdulist = fits.open(img)
         img_planes = find_image_planes(hdulist)
         for plane in img_planes:
+            plane_name = '{}[{}]'.format(img,plane)
             dat = hdulist[plane].data
             valid = dat[~np.isnan(dat)]
-            mean = valid.mean()
-	    std = valid.std()
-            med = valid.median()
-            min=valid.min()
-            max=valid.max()
+            img_mean = valid.mean()
+            img_std = valid.std()
+            img_med = np.median(valid)
+            img_min=valid.min()
+            img_max=valid.max()
             n_good = len(valid)
-            n_nan = len(dat)-n_good
-            # unfinished!!
-            outstr = '{0} {:-f}; {:-f}'.format(plane_name,n_nan, n_good,mean,std,med,min,max) 
+            n_nan = np.size(dat)-n_good
+            outstr = '{:20s} {:7d} {:7d} {:.4e} {:.4e} {:.4e} {:.4e} {:4e}'.format(plane_name, n_good, n_nan, img_mean, img_std, img_med, img_min, img_max)
             print(outstr)
+            # end of loop over image planes
         hdulist.close()
     # end of loop over images
     return
