@@ -6,7 +6,8 @@ import numpy as np
 def correct_rgc(coord, glx_ctr=ICRS('00h42m44.33s +41d16m07.5s'),
         glx_PA=Angle('37d42m54s'),
         glx_incl=Angle('77.5d'),
-        glx_dist=Distance(783, unit=u.kpc)):
+        glx_dist=Distance(783, unit=u.kpc),
+        deproject=True):
     """Computes deprojected galactocentric distance.
 
     Inspired by: http://idl-moustakas.googlecode.com/svn-history/
@@ -25,6 +26,8 @@ def correct_rgc(coord, glx_ctr=ICRS('00h42m44.33s +41d16m07.5s'),
         Inclination angle of the galaxy disk.
     glx_dist : :class:`astropy.coordinates.Distance`
         Distance to galaxy.
+    deproject: :class:`bool`
+        Correct to face-on inclination?
 
     Returns
     -------
@@ -46,9 +49,13 @@ def correct_rgc(coord, glx_ctr=ICRS('00h42m44.33s +41d16m07.5s'),
     xp = (sky_radius * np.cos(phi.radian)).arcmin
     yp = (sky_radius * np.sin(phi.radian)).arcmin
 
-    # de-project
-    ypp = yp / np.cos(glx_incl.radian)
+    # de-project if desired
+    if deproject:
+        ypp = yp / np.cos(glx_incl.radian)
+    else:
+        ypp = yp
     obj_radius = np.sqrt(xp ** 2 + ypp ** 2)  # in arcmin
+    # TODO: options for units of output (might want angle rather than distance)
     obj_dist = Distance(Angle(obj_radius, unit=u.arcmin).radian * glx_dist,
             unit=glx_dist.unit)
 
