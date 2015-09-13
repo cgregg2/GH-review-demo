@@ -1,9 +1,9 @@
-from astropy.coordinates import ICRS, Distance, Angle
+from astropy.coordinates import SkyCoord, Distance, Angle
 from astropy import units as u
 import numpy as np
 
 
-def correct_rgc(coord, glx_ctr=ICRS('00h42m44.33s +41d16m07.5s'),
+def correct_rgc(coord, glx_ctr=SkyCoord('00h42m44.33s +41d16m07.5s', frame='icrs'),
         glx_PA=Angle('37d42m54s'),
         glx_incl=Angle('77.5d'),
         glx_dist=Distance(783, unit=u.kpc),
